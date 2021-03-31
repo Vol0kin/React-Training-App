@@ -15,8 +15,6 @@ const syncInit = () => {
 
 const db = syncInit();
 
-console.log(db.get('posts').value());
-
 module.exports = db;
 
 
