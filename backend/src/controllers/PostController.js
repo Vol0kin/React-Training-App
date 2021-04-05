@@ -57,6 +57,8 @@ class PostController {
     } else {
       this.db.get('posts').push(post).write();
     }
+
+    return post;
   }
 
   deletePost(id) {
