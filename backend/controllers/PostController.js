@@ -1,14 +1,15 @@
 const schema = require('../models/postSchema.json');
 const db = require('../db/database');
 const _ = require('lodash');
+const createError = require('http-errors');
 
 const Ajv = require('ajv');
-const ajv = new Ajv();
 
 class PostController {
   constructor(db) {
     this.db = db;
-    this.validate = ajv.compile(schema);
+    this.schema = schema;
+    this.validator = new Ajv();
   }
 
   getPost(id) {
@@ -17,10 +18,8 @@ class PostController {
       .value();
 
     if (!post) {
-      throw new Error(404);
+      throw createError(404, 'Post does not exist');
     }
-
-    console.log(post);
 
     return post;
   }
@@ -31,16 +30,67 @@ class PostController {
       .value();
 
     if (_.isEmpty(posts)) {
-      throw new Error(404);
+      throw createError(404, 'Post does not exist');
     }
-
-    console.log(posts);
 
     return posts;
   }
+
+  getAllPosts() {
+    const posts = this.db.get('posts').value();
+    
+    return posts;
+  }
+
+  addPost(postInfo) {
+    const latestPost = this.db.get('posts')
+      .maxBy('id')
+      .value();
+
+    const nextId = latestPost.id + 1;
+    const post = {id: nextId, ...postInfo};
+
+    const validPost = this.validator.validate(this.schema, post);
+
+    if (!validPost) {
+      throw createError(400, "Bad request: the petition's body is not valid");
+    } else {
+      this.db.get('posts').push(post).write();
+    }
+  }
+
+  deletePost(id) {
+    const post = this.db.get('posts')
+      .find({ 'id': id })
+      .value();
+
+    if (post) {
+      this.db.get('posts').remove(post).write();
+    } else {
+      throw createError(404, 'Post does not exist');
+    }
+  }
+
+  updatePost(updatedPost) {
+    const validPost = this.validator.validate(this.schema, updatedPost);
+
+    if (!validPost) {
+      throw createError(400, 'Bad request: wrong fields specified');
+    } else {
+      const { id } = updatedPost;
+
+      const post = this.db.get('posts')
+        .find({ 'id': id })
+        .value();
+
+      if (post) {
+        this.db.get('posts').find(post).assign(updatedPost).write();
+      } else {
+        throw createError(404, 'Post does not exist');
+      }
+    }
+  }
 };
 
-const controller = new PostController(db);
-// controller.getPost(10);
-// controller.getPostsByUserId(1);
 module.exports = PostController;
+
